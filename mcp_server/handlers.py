@@ -20,11 +20,10 @@ class CalendarHandlers:
     """Handler class for calendar MCP tools with Google Calendar as primary storage."""
     
     def __init__(self):
-        """Initialize handlers with Google Calendar service."""
-        self.google_service = get_google_calendar_service()
-        if not self.google_service.is_enabled():
-            raise RuntimeError("Google Calendar integration is not enabled or authenticated")
-        print("✅ Google Calendar integration active")
+        """Initialize handlers."""
+        # We don't initialize the service here to avoid startup crashes if credentials aren't set yet.
+        # Instead, we check for the service lazily in each method.
+        pass
     
     def _check_time_conflict(self, date_str: str, time_str: str, exclude_event_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Check for time conflicts in Google Calendar."""
@@ -37,7 +36,11 @@ class CalendarHandlers:
             day_start = meeting_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day_start + timedelta(days=1)
             
-            events = self.google_service.get_events(time_min=day_start, time_max=day_end)
+            google_service = get_google_calendar_service()
+            if not google_service or not google_service.is_enabled():
+                return None
+                
+            events = google_service.get_events(time_min=day_start, time_max=day_end)
             
             # Check for conflicts
             for event in events:
@@ -94,6 +97,14 @@ class CalendarHandlers:
                     "error": "Missing required fields (title, date, time)"
                 }
             
+            # Check connection
+            google_service = get_google_calendar_service()
+            if not google_service or not google_service.is_enabled():
+                return {
+                    "success": False,
+                    "error": "Google Calendar is not connected. Please configure credentials in the Settings tab."
+                }
+            
             # Parse and validate date
             parsed_date = parse_date(date)
             if not parsed_date:
@@ -140,7 +151,7 @@ class CalendarHandlers:
             }
             
             # Create in Google Calendar
-            google_event_id = self.google_service.create_event(meeting)
+            google_event_id = google_service.create_event(meeting)
             
             if google_event_id:
                 meeting["google_event_id"] = google_event_id
@@ -199,7 +210,14 @@ class CalendarHandlers:
                 time_max = time_min + timedelta(days=30)
             
             # Get events from Google Calendar
-            meetings = self.google_service.get_events(time_min=time_min, time_max=time_max)
+            google_service = get_google_calendar_service()
+            if not google_service or not google_service.is_enabled():
+                return {
+                    "success": False,
+                    "error": "Google Calendar is not connected. Please configure credentials in the Settings tab."
+                }
+                
+            meetings = google_service.get_events(time_min=time_min, time_max=time_max)
             
             if not meetings:
                 return {
@@ -257,7 +275,14 @@ class CalendarHandlers:
             time_min = datetime.now()
             time_max = time_min + timedelta(days=30)
             
-            meetings = self.google_service.get_events(time_min=time_min, time_max=time_max)
+            google_service = get_google_calendar_service()
+            if not google_service or not google_service.is_enabled():
+                return {
+                    "success": False,
+                    "error": "Google Calendar is not connected. Please configure credentials in the Settings tab."
+                }
+            
+            meetings = google_service.get_events(time_min=time_min, time_max=time_max)
             
             if not meetings:
                 return {
@@ -373,7 +398,7 @@ class CalendarHandlers:
                     }
             
             # Update in Google Calendar
-            success = self.google_service.update_event(meeting, google_event_id)
+            success = google_service.update_event(meeting, google_event_id)
             
             if success:
                 return {
@@ -423,7 +448,7 @@ class CalendarHandlers:
                 }
             
             # Delete from Google Calendar
-            success = self.google_service.delete_event(google_event_id)
+            success = google_service.delete_event(google_event_id)
             
             if success:
                 return {
